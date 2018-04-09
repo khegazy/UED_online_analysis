@@ -25,7 +25,7 @@ imgNames = [
 
 for name in imgNames:
   print(name)
-  img = get_image(name, dataType=np.float)
+  img = get_image(name, 1e5)
   plt.imshow(img)
   plt.show()
 
