@@ -65,6 +65,7 @@ for i,name in enumerate(bkgImgNames):
                 rLow=config.ROradLow, rHigh=config.ROradHigh)
   else:
     if config.doCenterFind[i]:
+      centerR,centerC = find_center(img, 550, 508, 350, 450)
       centerRsum += centerR
       centerCsum += centerC
       centerSumCount += 1
@@ -114,7 +115,7 @@ for name in imgNames:
     centerR = config.centerR
     centerC = config.centerC
   else:
-    centerR,centerC = get_image_center(img)
+    centerR,centerC = find_center(img, 550, 508, 350, 450)
 
   img = center_image(img, centerR, centerC, config.roiR, config.roiC)
 
