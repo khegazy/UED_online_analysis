@@ -15,6 +15,11 @@ class config {
     self.ROradHigh = 0.98
     self.normRadLow = 0.7
     self.normRadHigh = 0.9
+    self.centerR = None
+    self.centerC = None
+
+    self.gMatrixFolder = "/reg/neh/home/khegazy/analysis/legendreFitMatrices/"
+    self.Nrebin
 }
 
 imgNames = [
@@ -44,43 +49,86 @@ centerRsum = 0.
 centerCsum = 0.
 centerSumCount = 0.
 for i,name in enumerate(bkgImgNames):
-  #####  get image, remove hot pixels, get image norm  #####
+  ###  get image, remove hot pixels, get image norm  ###
   img = get_image(name, config.hotPixel)
 
-  #####  naive readout noise subtraction  #####
+  ###  naive readout noise subtraction  ###
   img = redoutNoise_subtraction(img, False, 
               rLow=config.rLow, cLow=config.cLow,
               rHigh=config.rHigh, cHigh=config.cHigh)
 
-  #####  center finding  #####
-  if config.doCenterFind[i]:
-    centerRsum += centerR
-    centerCsum += centerC
-    centerSumCount += 1
-    img = center_image(img, centerR, centerC, config.roiR, config.roiC)
+  ###  center finding  ###
+  if (config.centerC is not None) and (config.centerR is not None):
+    img = center_image(img, config.centerR, config.centerC, config.roiR, config.roiC)
     ## advanced readout noise subtraction 
     img = redoutNoise_subtraction(img, True, 
                 rLow=config.ROradLow, rHigh=config.ROradHigh)
-
-  #####  get image norm  #####
-  if config.bkgNorms[i] is None:
-    bkgImages.append(img/get_imageNorm(img, config.normRadLow, config.normRadHigh)) 
   else:
-    bkgImages.append(img/config.bkgNorms[i])
+    if config.doCenterFind[i]:
+      centerRsum += centerR
+      centerCsum += centerC
+      centerSumCount += 1
+      img = center_image(img, centerR, centerC, config.roiR, config.roiC)
+      ## advanced readout noise subtraction 
+      img = redoutNoise_subtraction(img, True, 
+                  rLow=config.ROradLow, rHigh=config.ROradHigh)
+    else:
+      reCenterImgs.append(i)
+
+  ###  get image norm  ###
+  if config.bkgNorms[i] is None:
+    bkgImages.append(img[:,:]/get_image_norm(img, config.normRadLow, config.normRadHigh)) 
+  else:
+    bkgImages.append(img[:,:]/config.bkgNorms[i])
+
+
+#####  centering images that can't use normal methods using average center  #####
+for ind in reCenterImgs:
+  img = center_image(bkgImages[ind], 
+              int(centerRsum/centerSumCount), int(centerCsum/centerSumCount),
+              config.roiR, config.roiC)
+  ## advanced readout noise subtraction 
+  img = redoutNoise_subtraction(img, True, 
+              rLow=config.ROradLow, rHigh=config.ROradHigh)
+
+  ###  get image norm  ###
+  if config.bkgNorms[i] is None:
+    bkgImages[ind] = img[:,:]/get_image_norm(img, config.normRadLow, config.normRadHigh)
+  else:
+    bkgImages[ind] = img[:,:]/config.bkgNorms[ind]
+
 
 
 
 print("hi")
 for name in imgNames:
   print(name)
+  ###  get image information  ###
+  info = get_image_info(name)
 
-  #####  get image, remove hot pixels, get image norm  #####
-  img,imgNorm = get_image(name, hotPixel)
+  ###  get image and remove hot pixels  ###
+  img = get_image(name, hotPixel)
 
-  #####  subtrac background images  #####
+  ###  center image  ###
+  if (config.centerR is not None) and (config.centerC is not None):
+    centerR = config.centerR
+    centerC = config.centerC
+  else:
+    centerR,centerC = get_image_center(img)
+
+  img = center_image(img, centerR, centerC, config.roiR, config.roiC)
+
+  ###  readout noise subtraction  ###
+  img = redoutNoise_subtraction(img, True, 
+              rLow=config.ROradLow, rHigh=config.ROradHigh)
+
+  ###  subtract background images  ###
   img = background_subtraction(img, bkgImages)
   plt.imshow(img)
   plt.show()
+
+  #####  Fit Legendres  #####
+  #imgRebin = rebin_image(img, config.Nrebin)  
 
 
 
