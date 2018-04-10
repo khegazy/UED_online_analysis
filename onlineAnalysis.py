@@ -128,7 +128,7 @@ for name in imgNames:
   plt.show()
 
   #####  Fit Legendres  #####
-  #imgRebin = rebin_image(img, config.Nrebin)  
+  imgRebin = rebin_image(img, config.Nrebin)  
 
 
 
