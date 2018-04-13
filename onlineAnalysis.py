@@ -1,5 +1,7 @@
 import numpy as np
+import os.path
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
 from getImg import *
 from makeLgMatrix import *
 from bkgSubtraction import *
@@ -21,7 +23,7 @@ class CONFIG():
     self.ROradHigh = 0.98
     self.normRadLow = 0.7
     self.normRadHigh = 0.9
-    self.roi = 800
+    self.roi = 804
     self.guessCenterR = 530
     self.guessCenterC = 500
     self.centerRadLow = 148
@@ -31,6 +33,10 @@ class CONFIG():
 
     self.gMatrixFolder = "/reg/neh/home/khegazy/analysis/legendreFitMatrices/"
     self.Nrebin = 5
+    self.Nlegendres = 6
+    self.NradialBins = 5
+
+    self.Qmax = 11.3
 
 imgNames = [
   "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
@@ -118,9 +124,19 @@ for ind in reCenterImgs:
     bkgImages[ind] = img[:,:]/config.bkgNorms[ind]
 
 
+plt.ion()
+fig = plt.figure()
+axLeg = fig.add_subplot(211)
+axLegAll = fig.add_subplot(212)
+Qrange = np.arange(config.NradialBins)*config.Qmax/config.NradialBins
 
+averageLegCoeffDict = {}
+averageLegCoeffArray = np.zeros((config.Nlegendres,1,config.NradialBins))
 
-print("hi")
+info = get_image_info(imgNames[0])
+delays = np.array([info.stageDelay], dtype=np.float)
+averageLegCoeffDict[info.stageDelay] = (0, 0)
+
 for name in imgNames:
   print(name)
   ###  get image information  ###
@@ -158,6 +174,68 @@ for name in imgNames:
 
   #####  Fit Legendres  #####
   imgRebin = rebin_image(img, config.Nrebin)  
+  ## get G matrix
+  gMatrixName = "gMatrix_pixels-" + str(imgRebin.shape[0])\
+                + "Nradii-" + str(config.NradialBins)\
+                + "Nlegendre-" + str(config.Nlegendres) + ".dat"
 
+  if not os.path.isfile(config.gMatrixFolder + "/" + gMatrixName):
+    make_legendre_gMatrix(config.NradialBins, config.Nlegendres, 
+                      imgRebin.shape[0], config.gMatrixFolder + "/" + gMatrixName)
+
+  gMatrix = np.fromfile(config.gMatrixFolder + "/" + gMatrixName,
+                          dtype=np.float)
+  print(gMatrix)
+  gMatrix = np.reshape(gMatrix, 
+                (imgRebin.shape[0]**2, config.NradialBins*config.Nlegendres))
+  print(gMatrix.shape)
+
+  ## invert g matrix
+  U,s,V = np.linalg.svd(gMatrix, full_matrices=False)
+  sInv = np.reshape(1./s, (-1,1))
+  sInvUtrans = np.multiply(sInv, np.transpose(U))
+  gInv = np.dot(np.transpose(V), sInvUtrans)
+
+  ## flatten image
+  imgFlat = np.reshape(imgRebin, (-1))
+
+  ## fit legendres
+  lgC = np.dot(gInv, imgFlat)
+  legendreCoefficients = np.reshape(lgC, (config.Nlegendres, config.NradialBins))
+
+  #plt.imshow(legendreCoefficients)
+  #plt.show()
+
+  print("delayyyy")
+  print(delays)
+  ind = np.searchsorted(delays, [info.stageDelay])[0]
+  if np.any(np.abs(delays-info.stageDelay) < 0.005):
+    delayInd = delays[ind]
+    print("delI", delayInd, info.stageDelay, ind)
+    print(averageLegCoeffDict[delayInd])
+    coeffs,Navg = averageLegCoeffDict[delayInd] 
+    updatedCoeffs = (coeffs*Navg + legendreCoefficients)/(Navg + 1)
+    averageLegCoeffDict[delayInd] = (updatedCoeffs, Navg + 1)
+    averageLegCoeffArray[:,ind,:] = np.reshape(updatedCoeffs, 
+                                          (config.Nlegendres, config.NradialBins))
+  else:
+    print("adding at",ind)
+    delays = np.insert(delays, ind, info.stageDelay)
+    print("shape1", averageLegCoeffArray.shape)
+    averageLegCoeffArray = np.insert(averageLegCoeffArray, ind, 
+              np.reshape(legendreCoefficients, (config.Nlegendres, config.NradialBins)),
+              axis=1)
+    print("shape2", averageLegCoeffArray.shape)
+
+
+    averageLegCoeffDict[info.stageDelay] = (legendreCoefficients, 1)
+
+  axLeg.cla()
+  axLeg.plot(legendreCoefficients[0,:])
+  timeDelay = (delays - delays[0])*1e-2/(3e8*1e-12)
+  axLegAll.pcolor(Qrange, timeDelay, averageLegCoeffArray[0,:,:], cmap=cm.RdBu)
+  fig.canvas.draw()
+
+            
 
 
