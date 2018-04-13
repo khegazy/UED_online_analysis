@@ -123,13 +123,14 @@ for ind in reCenterImgs:
   else:
     bkgImages[ind] = img[:,:]/config.bkgNorms[ind]
 
-
 plt.ion()
-fig = plt.figure()
-axLeg = fig.add_subplot(211)
-axLegAll = fig.add_subplot(212)
-Qrange = np.arange(config.NradialBins)*config.Qmax/config.NradialBins
+Qrange = np.arange(config.NradialBins+1)*config.Qmax/(config.NradialBins)
+fig,ax = plt.subplots(2, 1)
 
+ax[1].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
+ax[0].set(xlabel=r'Q $[\AA^{-1}]$', ylabel="Legendre 0")
+
+plot1d, = ax[0].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
 averageLegCoeffDict = {}
 averageLegCoeffArray = np.zeros((config.Nlegendres,1,config.NradialBins))
 
@@ -185,10 +186,8 @@ for name in imgNames:
 
   gMatrix = np.fromfile(config.gMatrixFolder + "/" + gMatrixName,
                           dtype=np.float)
-  print(gMatrix)
   gMatrix = np.reshape(gMatrix, 
                 (imgRebin.shape[0]**2, config.NradialBins*config.Nlegendres))
-  print(gMatrix.shape)
 
   ## invert g matrix
   U,s,V = np.linalg.svd(gMatrix, full_matrices=False)
@@ -202,38 +201,41 @@ for name in imgNames:
   ## fit legendres
   lgC = np.dot(gInv, imgFlat)
   legendreCoefficients = np.reshape(lgC, (config.Nlegendres, config.NradialBins))
-
   #plt.imshow(legendreCoefficients)
   #plt.show()
 
-  print("delayyyy")
-  print(delays)
+  #####  update time domain legendres  #####
   ind = np.searchsorted(delays, [info.stageDelay])[0]
   if np.any(np.abs(delays-info.stageDelay) < 0.005):
     delayInd = delays[ind]
-    print("delI", delayInd, info.stageDelay, ind)
-    print(averageLegCoeffDict[delayInd])
     coeffs,Navg = averageLegCoeffDict[delayInd] 
     updatedCoeffs = (coeffs*Navg + legendreCoefficients)/(Navg + 1)
     averageLegCoeffDict[delayInd] = (updatedCoeffs, Navg + 1)
     averageLegCoeffArray[:,ind,:] = np.reshape(updatedCoeffs, 
                                           (config.Nlegendres, config.NradialBins))
   else:
-    print("adding at",ind)
     delays = np.insert(delays, ind, info.stageDelay)
-    print("shape1", averageLegCoeffArray.shape)
     averageLegCoeffArray = np.insert(averageLegCoeffArray, ind, 
               np.reshape(legendreCoefficients, (config.Nlegendres, config.NradialBins)),
               axis=1)
-    print("shape2", averageLegCoeffArray.shape)
-
-
     averageLegCoeffDict[info.stageDelay] = (legendreCoefficients, 1)
 
-  axLeg.cla()
-  axLeg.plot(legendreCoefficients[0,:])
+  #####  plot time domain legendre fits  #####
+  plot1d.set_ydata(legendreCoefficients[0,:])
+  ax[0].set_ylim([0,legendreCoefficients[0,0]])
+
+
   timeDelay = (delays - delays[0])*1e-2/(3e8*1e-12)
-  axLegAll.pcolor(Qrange, timeDelay, averageLegCoeffArray[0,:,:], cmap=cm.RdBu)
+  if timeDelay.shape[0] > 1:
+    timeDelay = np.insert(timeDelay, -1, 2*timeDelay[-1]-timeDelay[-2])
+  else:
+    timeDelay = np.insert(timeDelay, -1, timeDelay[-1]+0.05)
+  X,Y = np.meshgrid(timeDelay, Qrange)
+  print(X,Y)
+  #axLegAll.pcolor(Qrange, timeDelay, averageLegCoeffArray[0,:,:], cmap=cm.RdBu)
+  ax[1].pcolor(X, Y, averageLegCoeffArray[0,:,:].T, cmap=cm.RdBu)
+  ax[1].set_ylim([0,config.Qmax])
+  ax[1].set_xlim([timeDelay[0],timeDelay[-1]])
   fig.canvas.draw()
 
             
