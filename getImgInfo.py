@@ -16,7 +16,9 @@ def get_image_info(name):
   info.imgNumber = int(name[ind1+1:ind2])
 
   ind1 = name.find("_", ind2)
-  info.stageDelay = float(name[ind2+1:ind1])
+  # Use int to avoid float precision error. 
+  # nanometer precision to work for all future fine adjustments
+  info.stageDelay = int(float(name[ind2+1:ind1])*1e6)
 
   return info
 

@@ -16,17 +16,21 @@ from saveResults import *
 
 class CONFIG():
   def __init__(self):
+
+    ###  file querying information  ###
     self.doQueryFolder = True
     self.queryFolder = "."
     self.queryBkgAddr = "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif"
 
-    self.saveFolder = "results"
-    self.saveFileName = "fullResults"
-    self.saveQueryResults = False
-    self.saveLoadedResults = True
+
+    ###  loading results and files  ###
+    # load saved results
+    self.loadSavedResults = True
+    self.loadSavedResultsFolder = "results"
+    self.loadSavedResultsFileName = "fullResults"
+
+    # load saved files
     self.loadFolders = []
-    #for f in os.listdir("/reg/ued/ana/scratch/CHD/20161212/LongScan2"):
-    #  self.loadFolders.append("/reg/ued/ana/scratch/CHD/20161212/LongScan2/" + f)
     self.loadFolders.append({
         "folder": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run057/images-ANDOR1", 
         "background": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
@@ -34,6 +38,15 @@ class CONFIG():
         "centerC" : None})
     self.subFolder = "images-ANDOR1"
     self.fileExtention = "*.tif"
+
+
+    ###  saving results  ###
+    self.saveFolder = "results"
+    self.saveFileName = "fullResults"
+    self.saveQueryResults = False
+    self.saveLoadedResults = True
+
+
     self.hotPixel = 1e5
     self.bkgImgNames = [ 
           "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
@@ -173,7 +186,9 @@ for ind in reCenterImgs:
 
 
 
-
+###  initialize file lists  ###
+queryFiles = []
+loadedFiles = []
 loadFiles = []
 for fld in config.loadFolders:
   folderName = fld["folder"] + "/" + config.fileExtention
@@ -183,17 +198,13 @@ for fld in config.loadFolders:
   centerCs = [fld["centerC"]]*len(diffractionFiles)
   loadFiles = loadFiles + zip(diffractionFiles, bkgImgFiles, centerRs, centerCs)
 
-queryFiles = []
-if config.doQueryFolder:
-  queryFiles = glob.glob(config.queryFolder + "/" 
-                    + config.subFolder + "/" + config.fileExtention)
-
 while (len(loadFiles) == 0) and (len(queryFiles) == 0):
   if not config.doQueryFolder:
     print("ERROR: There are no files included in the load folders!")
     raise RuntimeError
 
 
+###  initialize plots  ###
 plt.ion()
 Qrange = np.arange(config.NradialBins+1)*config.Qmax/(config.NradialBins)
 fig,ax = plt.subplots(2, 1)
@@ -202,20 +213,52 @@ ax[1].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
 ax[0].set(xlabel=r'Q $[\AA^{-1}]$', ylabel="Legendre 0")
 
 plot1d, = ax[0].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+
+
+###  initialize legendre variables  ###
 averageLegCoeffDict = {}
 averageLoadImgDict = {}
 averageLegCoeffArray = np.zeros((config.Nlegendres,1,config.NradialBins))
 
-initFile = None
-if len(loadFiles):
-  fileName,_,_,_ = loadFiles[0]
-  info = get_image_info(fileName)
-  delays = np.array([info.stageDelay], dtype=np.float)
-  averageLoadImgDict[info.stageDelay] = (0, 0)
-else:
-  info = get_image_info(newNames[0])
-  delays = np.array([info.stageDelay], dtype=np.float)
-  averageLegCoeffDict[info.stageDelay] = (0, 0)
+initializeFiles = True
+if config.loadSavedResults:
+  averageLegCoeffDict, loadedFiles, averageLegCoeffArray = load_results(config.loadSavedResultsFolder, config.loadSavedResultsFileName)
+  delays = np.sort(np.array(averageLegCoeffDict.keys()))
+  initializeFiles = False
+  print("SIZES: ", averageLegCoeffArray.shape)
+
+  # initialize loadind variables with first new entry
+  while len(loadFiles):
+    fileName,_,_,_ = loadFiles[0]
+    print("fileName", fileName)
+    if fileName in loadedFiles:
+      print("deleting")
+      del loadFiles[0]
+    else:
+      print("initializing")
+      info = get_image_info(fileName)
+      delays = np.array([info.stageDelay])
+      averageLoadImgDict[info.stageDelay] = (0, 0)
+      break
+
+while initializeFiles and\
+    (initializeFiles or (len(loadFiles) is 0) or (len(queryFiles) is 0)):
+  if len(loadFiles):
+    fileName,_,_,_ = loadFiles[0]
+    info = get_image_info(fileName)
+    delays = np.array([info.stageDelay])
+    averageLoadImgDict[info.stageDelay] = (0, 0)
+    initializeFiles = False
+  elif len(queryFiles):
+    info = get_image_info(queryFiles[0])
+    delays = np.array([info.stageDelay])
+    averageLegCoeffDict[info.stageDelay] = (0, 0)
+    initializeFiles = False
+  elif config.doQueryFolder:
+    queryFiles = query_folder(config.queryFolder, config.fileExtention)
+  else:
+    print("ERROR: Cannot run without loading files or querying folder!!!")
+    sys.exit()
 
 ### retrieve gMatrix for legendre fitting  ###
 assert ((config.roi+1)%config.Nrebin == 0),\
@@ -274,9 +317,10 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
           config.saveFolder, config.saveFileName)
 
     ###  search query folder for new files  ###
+    
     while len(queryFiles) == 0:
       print("INFO: Query folder is empty, waiting to check again")
-      time.sleep(10)
+      time.sleep(1)
       folderFiles = glob.glob(config.queryFolder + "/" + config.fileExtention)
       queryFiles = [fl for fl in folderFiles if fl not in loadedFiles]
     continue
@@ -377,7 +421,10 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
 
   #####  update time domain legendres  #####
   ind = np.searchsorted(delays, [info.stageDelay])[0]
-  if np.any(np.abs(delays-info.stageDelay) < 0.005):
+  print(delays)
+  print(ind, info.stageDelay)
+  print(np.any((delays-info.stageDelay) == 0))
+  if np.any((delays-info.stageDelay) == 0):
     delayInd = delays[ind]
     coeffs,Navg = averageLegCoeffDict[delayInd] 
     updatedCoeffs = (coeffs*Navg + legendreCoeffs)/(Navg + 1)
