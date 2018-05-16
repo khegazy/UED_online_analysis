@@ -16,7 +16,9 @@ def save_results(legDict, loadedFiles, legArray, folder, prefix=""):
   shape = list(legArray.shape)
   flatArray = np.reshape(legArray, (1,-1))
   arrayName = prefix + "averageLegCoeffs_shape"
-  os.remove(arrayName + "*dat")
+  deleteFiles = glob.glob(arrayName + "*dat")
+  for fl in deleteFiles:
+    os.remove(fl)
   for sh in shape:
     arrayName += "-" + str(sh)
   arrayName += ".dat"
