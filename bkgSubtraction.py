@@ -11,14 +11,20 @@ def readoutNoise_subtraction(image, isCentered, rLow=990, cLow=10, rHigh=1010, c
     c -= image.shape[1]//2
     r -= image.shape[0]//2
     rad = np.sqrt(c**2 + r**2)/(image.shape[0]/2)
-    radMask = rad>rLow and rad<rHigh
+    radMask = np.where((rad>rLow) & (rad<rHigh))
     noise = np.mean(image[radMask])
 
   else:
-    pixels = np.reshape(image[rLow:rHigh,cLow:cHigh], (-1))
-    pads = max(pixels.shape[0] - numAvg, 0)
-    noise = np.mean(pixels[pads:pixels.shape[0]-1-pads])
+    assert ((rLow>=0) and (rHigh<image.shape[0])),\
+        "Error: Readout noise row range ({}, {}) must be within [0, {}]!".format(
+            rLow, rHigh, image.shape[0])
+    assert ((cLow>=0) and (cHigh<image.shape[1])),\
+        "Error: Readout noise col range ({}, {}) must be within [0, {}]!".format(
+            cLow, cHigh, image.shape[1])
 
+    pixels = np.reshape(image[rLow:rHigh,cLow:cHigh], (-1))
+    pads = max(pixels.shape[0] - numAvg, 0)//2
+    noise = np.mean(pixels[pads:pixels.shape[0]-1-pads])
 
   return image - noise
 

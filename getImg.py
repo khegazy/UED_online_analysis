@@ -19,4 +19,7 @@ def get_image(img_name, hotPixel, windowSize=10, dataType=np.float):
                     max(0,c-shift):min(c+shift,cSize-1)])
     img[r,c] = newPixel
 
+  #meshR,meshC = np.meshgrid(np.arange(
+  #normMask = img
+
   return img
