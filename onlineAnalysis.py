@@ -18,24 +18,28 @@ class CONFIG():
   def __init__(self):
 
     ###  file querying information  ###
-    self.doQueryFolder = True
+    self.doQueryFolder = False
     self.queryFolder = "."
     self.queryBkgAddr = "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif"
 
 
     ###  loading results and files  ###
     # load saved results
-    self.loadSavedResults = True
+    self.loadSavedResults = False
     self.loadSavedResultsFolder = "results"
-    self.loadSavedResultsFileName = "fullResults"
+    self.loadSavedResultsFileName = "allCHD_"
 
     # load saved files
     self.loadFolders = []
-    self.loadFolders.append({
-        "folder": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run057/images-ANDOR1", 
-        "background": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
-        "centerR" : None,
-        "centerC" : None})
+    for fld in glob.glob("/reg/ued/ana/scratch/CHD/20161212/LongScan2/run*"):
+      print(fld)
+      self.loadFolders.append({
+          "folder": fld + "/images-ANDOR1", 
+          "background": None,
+          #"background": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
+          "centerR" : None,
+          "centerC" : None})
+    sys.exit()
     self.subFolder = "images-ANDOR1"
     self.fileExtention = "*.tif"
 
@@ -71,7 +75,11 @@ class CONFIG():
     self.NradialBins = 5
 
     self.Qmax = 11.3
+    self.normByAtomic = True
+    self.atomicDiffractionFile = "/reg/neh/home5/khegazy/analysis/CHD/simulation/diffractionPattern/output/references/atomicScattering_CHD_5Bins.dat"
+    self.atomicDiffractionDataType = np.float64
     self.plotPrefix = ""
+
 
 newNames = [
   "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
@@ -260,7 +268,12 @@ while initializeFiles and\
     print("ERROR: Cannot run without loading files or querying folder!!!")
     sys.exit()
 
-### retrieve gMatrix for legendre fitting  ###
+###  retrieving atomic diffraction  ###
+if config.normByAtomic:
+  atomicDiffraction = np.fromfile(config.atomicDiffractionFile, 
+      dtype=config.atomicDiffractionDataType)*1e20
+
+###  retrieve gMatrix for legendre fitting  ###
 assert ((config.roi+1)%config.Nrebin == 0),\
     "ERROR: Cannot rebin an image with size [{}, {}] by {}, change roi!".format(
         config.roi+1, config.roi+1, config.Nrebin)
@@ -289,14 +302,18 @@ loadConfig = CONFIG()
 while (len(loadFiles) != 0) or config.doQueryFolder:
   if len(loadFiles):
     name, bkgAddr, loadConfig.centerR, loadConfig.centerC = loadFiles.pop(0)
+    while name in loadedFiles:
+      name, bkgAddr, loadConfig.centerR, loadConfig.centerC = loadFiles.pop(0)
+
     loadingImage = True
     centerConfig = loadConfig
     loadedFiles.append(name)
 
     # load background
     if curBkgAddr is not fld["background"]:
-      bkgImg = get_image(fld["background"], config.hotPixel)
       curBkgAddr = fld["background"]
+      if curBkgAddr is not None:
+        bkgImg = get_image(fld["background"], config.hotPixel)
 
   elif len(queryFiles):
     name = queryFiles.pop(0)
@@ -307,8 +324,9 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
  
     # load background
     if curBkgAddr is not config.queryBkgAddr:
-      bkgImg = get_image(config.queryBkgAddr, config.hotPixel)
       curBkgAddr = config.queryBkgAddr
+      if curBkgAddr is not None:
+        bkgImg = get_image(config.queryBkgAddr, config.hotPixel)
 
   else:
     ###  save current results  ###
@@ -335,7 +353,8 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
   #plt.show()
 
   ###  subtract background images  ###
-  img -= bkgImg #background_subtraction(img, bkgImg)
+  if curBkgImg is not None:
+    img -= bkgImg #background_subtraction(img, bkgImg)
   #plt.imshow(img)
   #plt.show()
 
@@ -384,6 +403,8 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
         img,Navg = averageLoadImgDict[d]
         legendreCoeffs = fit_legendres(img, config.Nrebin, config.Nlegendres,
                                           config.NradialBins, gInv=gInv)
+        if config.normByAtomic:
+          legendreCoeffs /= atomicDiffraction 
 
         # record results
         averageLegCoeffDict[d] = (legendreCoeffs, Navg)
@@ -418,6 +439,8 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
   #####  fit legendres  #####
   legendreCoeffs = fit_legendres(img, config.Nrebin, config.Nlegendres,
                                           config.NradialBins, gInv=gInv)
+  if config.normByAtomic:
+    legendreCoeffs /= atomicDiffraction 
 
   #####  update time domain legendres  #####
   ind = np.searchsorted(delays, [info.stageDelay])[0]
