@@ -27,19 +27,20 @@ class CONFIG():
     # load saved results
     self.loadSavedResults = False
     self.loadSavedResultsFolder = "results"
-    self.loadSavedResultsFileName = "allCHD_"
+    self.loadSavedResultsFileName = "someCHD_"
 
     # load saved files
     self.loadFolders = []
     for fld in glob.glob("/reg/ued/ana/scratch/CHD/20161212/LongScan2/run*"):
+      if "run096" in fld:
+        continue
       print(fld)
       self.loadFolders.append({
           "folder": fld + "/images-ANDOR1", 
           "background": None,
           #"background": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
-          "centerR" : None,
-          "centerC" : None})
-    sys.exit()
+          "centerR" : 550,
+          "centerC" : 508})
     self.subFolder = "images-ANDOR1"
     self.fileExtention = "*.tif"
 
@@ -59,9 +60,9 @@ class CONFIG():
     self.bkgNorms = [None, None]
     self.ROradLow = 0.9
     self.ROradHigh = 0.98
-    self.normRadLow = 0.7
-    self.normRadHigh = 0.9
-    self.roi = 804
+    self.normRadLow = 0.65
+    self.normRadHigh = 0.95
+    self.roi = 834
     self.guessCenterR = 530
     self.guessCenterC = 500
     self.centerRadLow = 148
@@ -72,11 +73,11 @@ class CONFIG():
     self.gMatrixFolder = "/reg/neh/home/khegazy/analysis/legendreFitMatrices/"
     self.Nrebin = 5
     self.Nlegendres = 6
-    self.NradialBins = 5
+    self.NradialBins = 50
 
     self.Qmax = 11.3
     self.normByAtomic = True
-    self.atomicDiffractionFile = "/reg/neh/home5/khegazy/analysis/CHD/simulation/diffractionPattern/output/references/atomicScattering_CHD_5Bins.dat"
+    self.atomicDiffractionFile = "/reg/neh/home5/khegazy/analysis/CHD/simulation/diffractionPattern/output/references/atomicScattering_CHD.dat"
     self.atomicDiffractionDataType = np.float64
     self.plotPrefix = ""
 
@@ -200,7 +201,7 @@ loadedFiles = []
 loadFiles = []
 for fld in config.loadFolders:
   folderName = fld["folder"] + "/" + config.fileExtention
-  diffractionFiles = glob.glob(folderName)[:3]
+  diffractionFiles = glob.glob(folderName)
   bkgImgFiles = [fld["background"]]*len(diffractionFiles)
   centerRs = [fld["centerR"]]*len(diffractionFiles)
   centerCs = [fld["centerC"]]*len(diffractionFiles)
@@ -272,6 +273,9 @@ while initializeFiles and\
 if config.normByAtomic:
   atomicDiffraction = np.fromfile(config.atomicDiffractionFile, 
       dtype=config.atomicDiffractionDataType)*1e20
+  qGrid = (np.array(config.NradialBins, np.float) + 0.5)\
+            *config.Qmax/config.NradialBins
+  atomicNorm = 1./(atomicDiffraction*qGrid)
 
 ###  retrieve gMatrix for legendre fitting  ###
 assert ((config.roi+1)%config.Nrebin == 0),\
@@ -353,14 +357,14 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
   #plt.show()
 
   ###  subtract background images  ###
-  if curBkgImg is not None:
+  if curBkgAddr is not None:
     img -= bkgImg #background_subtraction(img, bkgImg)
   #plt.imshow(img)
   #plt.show()
 
   ###  center image  ###
   img, centerR, centerC = centering(img, centerConfig)
-  print("centers", centerR, centerC)
+  #print("centers", centerR, centerC)
   """
   if (config.centerR is not None) and (config.centerC is not None):
     centerR = config.centerR
@@ -380,6 +384,9 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
               rLow=config.ROradLow, rHigh=config.ROradHigh)
   #plt.imshow(img)
   #plt.show()
+
+  ###  image norm  ###
+  #imgNorm = get_image_norm(img, config.normRadLow, config.normRadHigh)
 
 
   #####  update loaded images  #####
@@ -404,7 +411,7 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
         legendreCoeffs = fit_legendres(img, config.Nrebin, config.Nlegendres,
                                           config.NradialBins, gInv=gInv)
         if config.normByAtomic:
-          legendreCoeffs /= atomicDiffraction 
+          legendreCoeffs *= atomicNorm 
 
         # record results
         averageLegCoeffDict[d] = (legendreCoeffs, Navg)
@@ -416,20 +423,29 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
           config.saveFolder, config.saveFileName)
 
       ###  plot results of loaded files  ###
-      timeDelay = (delays - delays[0])*1e-2/(3e8*1e-12)
+      timeDelay = (delays - delays[0])*1e-9/(3e8*1e-12)
       if timeDelay.shape[0] > 1:
         timeDelay = np.insert(timeDelay, -1, 2*timeDelay[-1]-timeDelay[-2])
       else:
         timeDelay = np.insert(timeDelay, -1, timeDelay[-1]+0.05)
+      timeDelay = timeDelay[1:]
       X,Y = np.meshgrid(timeDelay, Qrange)
 
       for i in [0,2]:
         figLoad = plt.figure()
         axLoad = figLoad.add_subplot(111)
 
-        axLoad.pcolor(X, Y, averageLegCoeffArray[i,:,:].T, cmap=cm.RdBu)
+        subTZleg = averageLegCoeffArray[i] - np.mean(averageLegCoeffArray[i,:3,:], axis=0)
+        shp = subTZleg.shape
+        mn = np.mean(subTZleg[:,0.2*shp[1]:0.7*shp[1]], axis=(0,1))
+        std = np.std(subTZleg[:,0.2*shp[1]:0.7*shp[1]], axis=(0,1))
+
+        #axLoad.pcolor(X, Y, averageLegCoeffArray[i,:,:].T, cmap=cm.RdBu)
+        img = axLoad.pcolor(X, Y, subTZleg[1:,:].T, cmap=cm.jet)
         axLoad.set_ylim([0,config.Qmax])
         axLoad.set_xlim([timeDelay[0],timeDelay[-1]])
+        figLoad.colorbar(img, ax=axLoad)
+        img.set_clim(mn-3*std, mn+3*std)
         figLoad.canvas.draw()
         figLoad.savefig("legednre" + str(i) + "_loadedFiles.png")
 
@@ -440,7 +456,7 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
   legendreCoeffs = fit_legendres(img, config.Nrebin, config.Nlegendres,
                                           config.NradialBins, gInv=gInv)
   if config.normByAtomic:
-    legendreCoeffs /= atomicDiffraction 
+    legendreCoeffs *= atomicNorm 
 
   #####  update time domain legendres  #####
   ind = np.searchsorted(delays, [info.stageDelay])[0]
