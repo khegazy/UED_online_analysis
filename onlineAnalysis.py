@@ -27,20 +27,32 @@ class CONFIG():
     # load saved results
     self.loadSavedResults = False
     self.loadSavedResultsFolder = "results"
-    self.loadSavedResultsFileName = "someCHD_"
+    self.loadSavedResultsFileName = "allCHD_"
 
     # load saved files
     self.loadFolders = []
+    #badRuns = ["019","020","024","025","016","017","018","006","009","096","111","118","010","138","149","035","039","077","007","086","008","091","026"]
+    badRuns = ["096","111","118","010","138","149","035","039","077","007","086","008","091","026"]
     for fld in glob.glob("/reg/ued/ana/scratch/CHD/20161212/LongScan2/run*"):
-      if "run096" in fld:
+      skip = False
+      for i in badRuns:
+        if "run"+i in fld:
+          skip = True
+          break
+      if skip:
         continue
-      print(fld)
-      self.loadFolders.append({
-          "folder": fld + "/images-ANDOR1", 
-          "background": None,
-          #"background": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
-          "centerR" : 550,
-          "centerC" : 508})
+
+      ind = fld.find("run")
+      runNum = int(fld[ind+3:])
+      if True: #(runNum > 80) and (runNum <= 180):
+
+        print(fld)
+        self.loadFolders.append({
+            "folder": fld + "/images-ANDOR1", 
+            "background": None,
+            #"background": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
+            "centerR" : 550,
+            "centerC" : 508})
     self.subFolder = "images-ANDOR1"
     self.fileExtention = "*.tif"
 
@@ -52,7 +64,7 @@ class CONFIG():
     self.saveLoadedResults = True
 
 
-    self.hotPixel = 1e5
+    self.hotPixel = 7000
     self.bkgImgNames = [ 
           "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
           "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-002-024.5850_0001.tif"]
@@ -69,6 +81,8 @@ class CONFIG():
     self.centerRadHigh = 152
     self.centerR = 550 #None
     self.centerC = 508 #None
+    self.sumMin = 5.59e8
+    self.sumMax = 5.72e8
 
     self.gMatrixFolder = "/reg/neh/home/khegazy/analysis/legendreFitMatrices/"
     self.Nrebin = 5
@@ -192,7 +206,7 @@ for ind in reCenterImgs:
 
 
 
-
+saveNorms = []
 
 
 ###  initialize file lists  ###
@@ -225,29 +239,26 @@ plot1d, = ax[0].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
 
 
 ###  initialize legendre variables  ###
-averageLegCoeffDict = {}
-averageLoadImgDict = {}
+legCoeffDict = {}
+loadImgDict = {}
 averageLegCoeffArray = np.zeros((config.Nlegendres,1,config.NradialBins))
 
 initializeFiles = True
 if config.loadSavedResults:
-  averageLegCoeffDict, loadedFiles, averageLegCoeffArray = load_results(config.loadSavedResultsFolder, config.loadSavedResultsFileName)
-  delays = np.sort(np.array(averageLegCoeffDict.keys()))
+  legCoeffDict, loadedFiles, averageLegCoeffArray =\
+      load_results(config.loadSavedResultsFolder, config.loadSavedResultsFileName)
+  delays = np.sort(np.array(legCoeffDict.keys()))
   initializeFiles = False
-  print("SIZES: ", averageLegCoeffArray.shape)
 
   # initialize loadind variables with first new entry
   while len(loadFiles):
     fileName,_,_,_ = loadFiles[0]
-    print("fileName", fileName)
     if fileName in loadedFiles:
-      print("deleting")
       del loadFiles[0]
     else:
-      print("initializing")
       info = get_image_info(fileName)
       delays = np.array([info.stageDelay])
-      averageLoadImgDict[info.stageDelay] = (0, 0)
+      loadImgDict[info.stageDelay] = (0, 0)
       break
 
 while initializeFiles and\
@@ -256,18 +267,29 @@ while initializeFiles and\
     fileName,_,_,_ = loadFiles[0]
     info = get_image_info(fileName)
     delays = np.array([info.stageDelay])
-    averageLoadImgDict[info.stageDelay] = (0, 0)
+    loadImgDict[info.stageDelay] = (0, 0)
     initializeFiles = False
   elif len(queryFiles):
     info = get_image_info(queryFiles[0])
     delays = np.array([info.stageDelay])
-    averageLegCoeffDict[info.stageDelay] = (0, 0)
+    legCoeffDict[info.stageDelay] = (0, 0)
     initializeFiles = False
   elif config.doQueryFolder:
     queryFiles = query_folder(config.queryFolder, config.fileExtention)
   else:
     print("ERROR: Cannot run without loading files or querying folder!!!")
     sys.exit()
+
+for i in np.arange(len(loadFiles)):
+  fileName,_,_,_ = loadFiles[-1]
+  imgSum = np.sum(get_image(fileName, config.hotPixel))
+  if (imgSum < config.sumMin) or (imgSum > config.sumMax):
+    del loadFiles[-1]
+  else:
+    break
+
+
+
 
 ###  retrieving atomic diffraction  ###
 if config.normByAtomic:
@@ -335,7 +357,7 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
   else:
     ###  save current results  ###
     if config.saveQueryResults:
-      save_results(averageLegCoeffDict, loadedFiles, averageLegCoeffArray,
+      save_results(legCoeffDict, loadedFiles, averageLegCoeffArray,
           config.saveFolder, config.saveFileName)
 
     ###  search query folder for new files  ###
@@ -347,12 +369,15 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
       queryFiles = [fl for fl in folderFiles if fl not in loadedFiles]
     continue
 
-  print(name)
   ###  get image information  ###
   info = get_image_info(name)
 
   ###  get image and remove hot pixels  ###
   img = get_image(name, config.hotPixel)
+  saveNorms.append(np.sum(img))
+  imgSum = np.sum(img)
+  if (imgSum < config.sumMin) or (imgSum > config.sumMax):
+    continue
   #plt.imshow(img)
   #plt.show()
 
@@ -386,7 +411,7 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
   #plt.show()
 
   ###  image norm  ###
-  #imgNorm = get_image_norm(img, config.normRadLow, config.normRadHigh)
+  imgNorm = 1#get_image_norm(img, config.normRadLow, config.normRadHigh)
 
 
   #####  update loaded images  #####
@@ -394,33 +419,53 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
     ind = np.searchsorted(delays, [info.stageDelay])[0]
     if np.any(np.abs(delays-info.stageDelay) < 0.005):
       delayInd = delays[ind]
-      avgImg,Navg = averageLoadImgDict[delayInd] 
-      updatedImg = (avgImg*Navg + img)/(Navg + 1)
-      averageLoadImgDict[delayInd] = (updatedImg, Navg + 1)
+      loadImg,norm = loadImgDict[delayInd] 
+      loadImgDict[delayInd] = (loadImg + img, norm + imgNorm)
     else:
       delays = np.insert(delays, ind, info.stageDelay)
-      averageLoadImgDict[info.stageDelay] = (img, 1)
+      loadImgDict[info.stageDelay] = (img, imgNorm)
 
+    """
+    legendreCoeffs = fit_legendres(img, config.Nrebin, config.Nlegendres,
+                                     config.NradialBins, gInv=gInv)
+    X,Y = np.meshgrid(np.array([0,1]), Qrange)
+    fitTest = plt.figure()
+    axTest = figTest.add_subplot(111)
+    img = axTest.pcolor(X, Y, np.reshape(legendreCoeffs[0,:],(1,-1)).T, cmap=cm.jet)
+        axLoad.set_ylim([0,config.Qmax])
+        axLoad.set_xlim([timeDelay[0],timeDelay[-1]])
+        figLoad.colorbar(img, ax=axLoad)
+        img.set_clim(-1*maxRange, maxRange)
+        figLoad.canvas.draw()
+        figLoad.savefig("legednre" + str(i) + "_loadedFiles.png")
+
+
+    """
     if len(loadFiles) == 0:
       averageLegCoeffArray = np.zeros((config.Nlegendres, 
                                        delays.shape[0], 
                                        config.NradialBins), np.float)
       for i,d in enumerate(delays):
         # fit legendres
-        img,Navg = averageLoadImgDict[d]
+        img,norm = loadImgDict[d]
         legendreCoeffs = fit_legendres(img, config.Nrebin, config.Nlegendres,
                                           config.NradialBins, gInv=gInv)
         if config.normByAtomic:
           legendreCoeffs *= atomicNorm 
 
         # record results
-        averageLegCoeffDict[d] = (legendreCoeffs, Navg)
-        averageLegCoeffArray[:,i,:] = legendreCoeffs
+        legCoeffDict[d] = (legendreCoeffs, norm)
+        averageLegCoeffArray[:,i,:] = legendreCoeffs/norm
 
       ###  save results  ###
       if config.saveLoadedResults:
-        save_results(averageLegCoeffDict, loadedFiles, averageLegCoeffArray,
+        save_results(legCoeffDict, loadedFiles, averageLegCoeffArray,
           config.saveFolder, config.saveFileName)
+
+      plt.hist(saveNorms, 30)
+      plt.show()
+      plt.savefig("normDist.png")
+
 
       ###  plot results of loaded files  ###
       timeDelay = (delays - delays[0])*1e-9/(3e8*1e-12)
@@ -435,17 +480,22 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
         figLoad = plt.figure()
         axLoad = figLoad.add_subplot(111)
 
-        subTZleg = averageLegCoeffArray[i] - np.mean(averageLegCoeffArray[i,:3,:], axis=0)
+        subTZleg = averageLegCoeffArray[i] - np.mean(averageLegCoeffArray[i,:4,:], axis=0)
         shp = subTZleg.shape
         mn = np.mean(subTZleg[:,0.2*shp[1]:0.7*shp[1]], axis=(0,1))
         std = np.std(subTZleg[:,0.2*shp[1]:0.7*shp[1]], axis=(0,1))
+        if mn > 0:
+          maxRange = np.abs(mn - 3*std)
+        else:
+          maxRange = mn + 3*std
+        #maxRange = 0.14
 
         #axLoad.pcolor(X, Y, averageLegCoeffArray[i,:,:].T, cmap=cm.RdBu)
         img = axLoad.pcolor(X, Y, subTZleg[1:,:].T, cmap=cm.jet)
         axLoad.set_ylim([0,config.Qmax])
         axLoad.set_xlim([timeDelay[0],timeDelay[-1]])
         figLoad.colorbar(img, ax=axLoad)
-        img.set_clim(mn-3*std, mn+3*std)
+        img.set_clim(-1*maxRange, maxRange)
         figLoad.canvas.draw()
         figLoad.savefig("legednre" + str(i) + "_loadedFiles.png")
 
@@ -465,15 +515,15 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
   print(np.any((delays-info.stageDelay) == 0))
   if np.any((delays-info.stageDelay) == 0):
     delayInd = delays[ind]
-    coeffs,Navg = averageLegCoeffDict[delayInd] 
-    updatedCoeffs = (coeffs*Navg + legendreCoeffs)/(Navg + 1)
-    averageLegCoeffDict[delayInd] = (updatedCoeffs, Navg + 1)
-    averageLegCoeffArray[:,ind,:] = updatedCoeffs[:,:]
+    coeffs,norm = legCoeffDict[delayInd] 
+    updatedCoeffs = coeffs + legendreCoeffs
+    legCoeffDict[delayInd] = (updatedCoeffs, norm + imgNorm)
+    averageLegCoeffArray[:,ind,:] = updatedCoeffs[:,:]/(norm + imgNorm)
   else:
     delays = np.insert(delays, ind, info.stageDelay)
     averageLegCoeffArray = np.insert(averageLegCoeffArray, ind, 
                                       legendreCoeffs[:,:], axis=1)
-    averageLegCoeffDict[info.stageDelay] = (legendreCoeffs, 1)
+    legCoeffDict[info.stageDelay] = (legendreCoeffs, imgNorm)
 
   #####  plot time domain legendre fits  #####
   plot1d.set_ydata(legendreCoeffs[0,:])

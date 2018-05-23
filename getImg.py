@@ -14,10 +14,13 @@ def get_image(img_name, hotPixel, windowSize=10, dataType=np.float):
   rSize = img.shape[0]
   cSize = img.shape[1]
   for r,c in zip(indR,indC):
+    """
     newPixel = np.median(
                 img[max(0,r-shift):min(r+shift,rSize-1),
                     max(0,c-shift):min(c+shift,cSize-1)])
     img[r,c] = newPixel
+    """
+    img[r,c] = 0
 
   #meshR,meshC = np.meshgrid(np.arange(
   #normMask = img
