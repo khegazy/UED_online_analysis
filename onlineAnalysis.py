@@ -2,6 +2,7 @@ import numpy as np
 import os
 import time
 import glob
+import copy
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 from getImg import *
@@ -13,13 +14,14 @@ from getImgNorm import *
 from getImgInfo import *
 from fitLegendres import *
 from saveResults import *
+from queryFolder import *
 
 class CONFIG():
   def __init__(self):
 
     ###  file querying information  ###
-    self.doQueryFolder = False
-    self.queryFolder = "."
+    self.doQueryFolder = True
+    self.queryFolder = "/reg/ued/ana/scratch/CHD/20161212/testScan"
     self.queryBkgAddr = "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif"
 
 
@@ -32,7 +34,8 @@ class CONFIG():
     # load saved files
     self.loadFolders = []
     #badRuns = ["019","020","024","025","016","017","018","006","009","096","111","118","010","138","149","035","039","077","007","086","008","091","026"]
-    badRuns = ["096","111","118","010","138","149","035","039","077","007","086","008","091","026"]
+    badRuns = ["096","111","1i18","010","138","149","035","039","077","007","086","008","091","026"]
+    """
     for fld in glob.glob("/reg/ued/ana/scratch/CHD/20161212/LongScan2/run*"):
       skip = False
       for i in badRuns:
@@ -53,15 +56,16 @@ class CONFIG():
             #"background": "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
             "centerR" : 550,
             "centerC" : 508})
+    """
     self.subFolder = "images-ANDOR1"
-    self.fileExtention = "*.tif"
+    self.fileExtention = ".tif"
 
 
     ###  saving results  ###
     self.saveFolder = "results"
     self.saveFileName = "fullResults"
     self.saveQueryResults = False
-    self.saveLoadedResults = True
+    self.saveLoadedResults = False
 
 
     self.hotPixel = 7000
@@ -94,6 +98,8 @@ class CONFIG():
     self.atomicDiffractionFile = "/reg/neh/home5/khegazy/analysis/CHD/simulation/diffractionPattern/output/references/atomicScattering_CHD.dat"
     self.atomicDiffractionDataType = np.float64
     self.plotPrefix = ""
+    self.plotFigSize = (14, 6)
+    self.dpi = 80
 
 
 newNames = [
@@ -126,93 +132,14 @@ centerRsum = 0.
 centerCsum = 0.
 centerSumCount = 0.
 
-"""
-while len(config.loadFolders):
-  loadDict = config.loadFolders.pop(0)
-  loadFiles = os.listdir(loadDict["folder"])  
-  if loadDict["background"] in loadFiles:
-    loadFiles.remove(loadDict["background"])
-
-  ###  find the center for this run  ###
-  loadConfig = CONFIG()
-  loadConfig.centerR = loadDict.centerR
-  loadConfig.centerC = loadDict.centerC
-
-  if (loadConfig.centerC is None) or (loadConfig.centerR is None):
-    for i in range(min(loadConfig.Ncenters, len(loadFiles))):
-      ###  get image, remove hot pixels, get image norm  ###
-      img = get_image(name, config.hotPixel)
-
-      _, centerR, centerC = centering(img, loadConfig)
-      centerRsum += centerR
-      centerCsum += centerC
-      centerSumCount += 1
-
-    loadConfig.centerR = int(centerRsum/float(centerSumCount))
-    loadConfig.centerC = int(centerCsum/float(centerSumCount))
-
-  ###  get background image  ###
-  loadbkg = get_image(loaddict["background"], config.hotpixel)
-
-  imgSum    = np.zeros((config.roi, config.roi), np.float)
-  imgNorms  = 0
-  for i,name in enumerate(loadFiles):
-    ###  get image, remove hot pixels, get image norm  ###
-    img = get_image(name, config.hotPixel)
-
-    ###  subtract background  ###
-    img = img - loadBkg
-    
-    ###  centering image  ###
-    img, _, _ = centering(img, loadConfig)
-
-    ###  readout noise subtraction  ### 
-    img = readoutNoise_subtraction(img, True, 
-                rLow=config.ROradLow, rHigh=config.ROradHigh)
-
-    ###  weighted sum of images  ###
-    imgSum    += img
-    imgNorms  += get_image_norm(img, loadConfig.normRadLow, loadConfig.normRadHigh))
-
-  finalImg = imgSum/imgNorms
-  finalImg.tofile(
-
-
-
-  loadImages += finalImg
-  loadNorms += 1.0
-
-
-#####  centering images that can't use normal methods using average center  #####
-for ind in reCenterImgs:
-  img = center_image(bkgImages[ind], 
-              centerR, centerC, config.roi)
-  ## advanced readout noise subtraction 
-  img = readoutNoise_subtraction(img, True, 
-              rLow=config.ROradLow, rHigh=config.ROradHigh)
-
-  ###  get image norm  ###
-  if config.bkgNorms[i] is None:
-    bkgImages[ind] = img[:,:]/get_image_norm(img, config.normRadLow, config.normRadHigh)
-  else:
-    bkgImages[ind] = img[:,:]/config.bkgNorms[ind]
-
-"""
-
-
-
-
-
-
-
 
 saveNorms = []
 
 
 ###  initialize file lists  ###
-queryFiles = []
 loadedFiles = []
 loadFiles = []
+queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
 for fld in config.loadFolders:
   folderName = fld["folder"] + "/" + config.fileExtention
   diffractionFiles = glob.glob(folderName)
@@ -223,19 +150,39 @@ for fld in config.loadFolders:
 
 while (len(loadFiles) == 0) and (len(queryFiles) == 0):
   if not config.doQueryFolder:
-    print("ERROR: There are no files included in the load folders!")
-    raise RuntimeError
+    raise RuntimeError("ERROR: There are no files included in the load folders!")
+  else:
+    queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
+    while not len(queryFiles):
+      print("There are no diffraction patterns under %s, will keep looking..." % config.queryFolder)
+      time.sleep(10)
+      queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
 
 
 ###  initialize plots  ###
 plt.ion()
 Qrange = np.arange(config.NradialBins+1)*config.Qmax/(config.NradialBins)
-fig,ax = plt.subplots(2, 1)
+fig,ax = plt.subplots(2, 4, figsize=config.plotFigSize, dpi=config.dpi)
 
-ax[1].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
-ax[0].set(xlabel=r'Q $[\AA^{-1}]$', ylabel="Legendre 0")
+ax[0,0].get_xaxis().set_visible(False)
+ax[0,0].get_yaxis().set_visible(False)
+ax[1,0].get_xaxis().set_visible(False)
+ax[1,0].get_yaxis().set_visible(False)
+ax[0,1].set(xlabel=r'Q $[\AA^{-1}]$', ylabel="")
+ax[1,1].set(xlabel="Time", ylabel="Total Counts")
+ax[0,2].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
+ax[1,2].set(xlabel="Time [ps]", ylabel="Legendre 0")
+ax[0,3].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
+ax[1,3].set(xlabel="Time [ps]", ylabel="Legendre 2")
 
-plot1d, = ax[0].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+plotCurLeg, = ax[0,1].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+plotL0LO,   = ax[1,2].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+plotL2LO,   = ax[1,3].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+
+
+###  image variables  ###
+aggregateImage = np.zeros((1024,1024), np.int32)
+imageSums = []
 
 
 ###  initialize legendre variables  ###
@@ -250,7 +197,7 @@ if config.loadSavedResults:
   delays = np.sort(np.array(legCoeffDict.keys()))
   initializeFiles = False
 
-  # initialize loadind variables with first new entry
+  # initialize loading variables with first new entry
   while len(loadFiles):
     fileName,_,_,_ = loadFiles[0]
     if fileName in loadedFiles:
@@ -260,6 +207,7 @@ if config.loadSavedResults:
       delays = np.array([info.stageDelay])
       loadImgDict[info.stageDelay] = (0, 0)
       break
+
 
 while initializeFiles and\
     (initializeFiles or (len(loadFiles) is 0) or (len(queryFiles) is 0)):
@@ -275,7 +223,7 @@ while initializeFiles and\
     legCoeffDict[info.stageDelay] = (0, 0)
     initializeFiles = False
   elif config.doQueryFolder:
-    queryFiles = query_folder(config.queryFolder, config.fileExtention)
+    queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
   else:
     print("ERROR: Cannot run without loading files or querying folder!!!")
     sys.exit()
@@ -321,7 +269,6 @@ gMatrix = np.reshape(gMatrix,
 ## invert g matrix using SVD decomposition
 gInv = invert_matrix_SVD(gMatrix)
 
-loadedFiles = []
 loadingImage = False
 curBkgAddr = ""
 loadConfig = CONFIG()
@@ -362,20 +309,25 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
 
     ###  search query folder for new files  ###
     
+    queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
     while len(queryFiles) == 0:
       print("INFO: Query folder is empty, waiting to check again")
       time.sleep(1)
-      folderFiles = glob.glob(config.queryFolder + "/" + config.fileExtention)
-      queryFiles = [fl for fl in folderFiles if fl not in loadedFiles]
+      queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
     continue
 
+  print("Now looking at %s" % name)
   ###  get image information  ###
   info = get_image_info(name)
 
   ###  get image and remove hot pixels  ###
-  img = get_image(name, config.hotPixel)
-  saveNorms.append(np.sum(img))
+  imgOrig = get_image(name, config.hotPixel)
+  aggregateImage += imgOrig
+  img = copy.deepcopy(imgOrig)
+
+  ###  check total scattering intensity  ###
   imgSum = np.sum(img)
+  imageSums.append(imgSum)
   if (imgSum < config.sumMin) or (imgSum > config.sumMax):
     continue
   #plt.imshow(img)
@@ -526,9 +478,17 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
     legCoeffDict[info.stageDelay] = (legendreCoeffs, imgNorm)
 
   #####  plot time domain legendre fits  #####
-  plot1d.set_ydata(legendreCoeffs[0,:])
-  ax[0].set_ylim([0,legendreCoeffs[0,0]])
 
+  ###  diffraction patterns  ###
+  ax[0,0].imshow(imgOrig)
+  ax[1,0].imshow(aggregateImage)
+
+  plotCurLeg.set_ydata(legendreCoeffs[0,:])
+  #ax[0,1].set_ylim([0,legendreCoeffs[0,0]])
+
+  ax[1,1].plot(np.arange(len(imageSums)), imageSums)
+
+  ###  time dependent plots  ###
 
   timeDelay = (delays - delays[0])*1e-2/(3e8*1e-12)
   if timeDelay.shape[0] > 1:
@@ -536,11 +496,31 @@ while (len(loadFiles) != 0) or config.doQueryFolder:
   else:
     timeDelay = np.insert(timeDelay, -1, timeDelay[-1]+0.05)
   X,Y = np.meshgrid(timeDelay, Qrange)
-  print(X,Y)
   #axLegAll.pcolor(Qrange, timeDelay, averageLegCoeffArray[0,:,:], cmap=cm.RdBu)
-  ax[1].pcolor(X, Y, averageLegCoeffArray[0,:,:].T, cmap=cm.RdBu)
-  ax[1].set_ylim([0,config.Qmax])
-  ax[1].set_xlim([timeDelay[0],timeDelay[-1]])
+  # aggregate legendre 0 plot
+  ax[0,2].pcolor(X, Y, averageLegCoeffArray[0,:,:].T, cmap=cm.RdBu)
+  ax[0,2].set_ylim([0,config.Qmax])
+  ax[0,2].set_xlim([timeDelay[0],timeDelay[-1]])
+
+  lineOut = np.sum(averageLegCoeffArray[0,:,10:20], axis=1)
+  plotL0LO.set_data(timeDelay[:-1], lineOut)
+  ax[1,2].set_ylim([min(lineOut),max(lineOut)])
+  ax[1,2].set_xlim([timeDelay[0],timeDelay[-1]])
+  #plotL0LO.set_xdata(timeDelay[:-1])
+  #plotL0LO.set_ydata(lineOut)
+
+  # aggregate legendre 2 plot
+  ax[0,3].pcolor(X, Y, averageLegCoeffArray[2,:,:].T, cmap=cm.RdBu)
+  ax[0,3].set_ylim([0,config.Qmax])
+  ax[0,3].set_xlim([timeDelay[0],timeDelay[-1]])
+
+  lineOut = np.sum(averageLegCoeffArray[2,:,10:20], axis=1)
+  plotL2LO.set_data(timeDelay[:-1], lineOut)
+  ax[1,3].set_ylim([min(lineOut),max(lineOut)])
+  ax[1,3].set_xlim([timeDelay[0],timeDelay[-1]])
+  #plotL2LO.set_xdata(timeDelay[:-1])
+  #plotL2LO.set_ydata(lineOut)
+
   fig.canvas.draw()
 
 
