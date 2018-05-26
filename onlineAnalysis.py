@@ -93,7 +93,8 @@ class CONFIG():
     self.Nlegendres = 6
     self.NradialBins = 50
 
-    self.Qmax = 11.3
+    self.QperPixel = 22.6/900 #11.3
+    self.Qmax = self.QperPixel*self.roi/2
     self.normByAtomic = True
     self.atomicDiffractionFile = "/reg/neh/home5/khegazy/analysis/CHD/simulation/diffractionPattern/output/references/atomicScattering_CHD.dat"
     self.atomicDiffractionDataType = np.float64
