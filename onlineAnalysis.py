@@ -121,22 +121,22 @@ class CONFIG():
     #################################
 
     # q normalization
-    self.QperPixel = 22.6/900 
-    self.Qmax = self.QperPixel*self.roi/2
+    self.QperPixel  = 22.6/900 
+    self.Qmax       = self.QperPixel*self.roi/2
 
     # calculate sM(s) by normalizing with atomic diffraction
-    self.normByAtomic = True
-    self.atomicDiffractionFile = "/reg/neh/home5/khegazy/analysis/CHD/simulation/diffractionPattern/output/references/atomicScattering_CHD.dat"
-    self.atomicDiffractionDataType = np.float64
+    self.normByAtomic               = True
+    self.atomicDiffractionFile      = "/reg/neh/home5/khegazy/analysis/CHD/simulation/diffractionPattern/output/references/atomicScattering_CHD.dat"
+    self.atomicDiffractionDataType  = np.float64
 
 
     #############################
     ###  plotting parameters  ###
     #############################
 
-    self.plotPrefix = ""
-    self.plotFigSize = (14, 6)
-    self.dpi = 80
+    self.plotPrefix   = ""
+    self.plotFigSize  = (14, 6)
+    self.dpi          = 80
 
 
 
