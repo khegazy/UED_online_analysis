@@ -19,23 +19,35 @@ from queryFolder import *
 class CONFIG():
   def __init__(self):
 
+
+    ###################################
     ###  file querying information  ###
-    self.doQueryFolder = True
-    self.queryFolder = "/reg/ued/ana/scratch/CHD/20161212/testScan"
-    self.queryBkgAddr = "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif"
+    ###################################
+
+    self.doQueryFolder  = True
+    self.queryFolder    = "/reg/ued/ana/scratch/CHD/20161212/testScan"
+    self.queryBkgAddr   = "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif"
 
 
-    ###  loading results and files  ###
-    # load saved results
-    self.loadSavedResults = False
-    self.loadSavedResultsFolder = "results"
-    self.loadSavedResultsFileName = "allCHD_"
+    ########################
+    ###  saving results  ###
+    ########################
 
-    # load saved files
-    self.loadFolders = []
-    #badRuns = ["019","020","024","025","016","017","018","006","009","096","111","118","010","138","149","035","039","077","007","086","008","091","026"]
-    badRuns = ["096","111","1i18","010","138","149","035","039","077","007","086","008","091","026"]
+    self.saveQueryResults   = False
+    self.saveLoadedResults  = False
+    self.saveFolder         = "results"
+    self.saveFileName       = "fullResults"
+
+
+    ##################################
+    ###  loading results and data  ###
+    ##################################
+
+    # load previous data
+    self.loadFolders    = []       # do not load anything if empty
+    self.fileExtention  = ".tif"
     """
+    badRuns = ["096","111","1i18","010","138","149","035","039","077","007","086","008","091","026"]
     for fld in glob.glob("/reg/ued/ana/scratch/CHD/20161212/LongScan2/run*"):
       skip = False
       for i in badRuns:
@@ -57,76 +69,86 @@ class CONFIG():
             "centerR" : 550,
             "centerC" : 508})
     """
-    self.subFolder = "images-ANDOR1"
-    self.fileExtention = ".tif"
+
+    # load saved results (saved by this analysis)
+    self.loadSavedResults           = False
+    self.loadSavedResultsFolder     = "results"
+    self.loadSavedResultsFileName   = "allCHD_"
 
 
-    ###  saving results  ###
-    self.saveFolder = "results"
-    self.saveFileName = "fullResults"
-    self.saveQueryResults = False
-    self.saveLoadedResults = False
+    #############################
+    ###  analysis parameters  ###
+    #############################
 
-
-    self.hotPixel = 7000
+    # background images (will sum images in list)
     self.bkgImgNames = [ 
           "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
           "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-002-024.5850_0001.tif"]
-    self.doCenterFind = [True, False]
-    self.bkgNorms = [None, None]
-    self.ROradLow = 0.9
-    self.ROradHigh = 0.98
-    self.normRadLow = 0.65
-    self.normRadHigh = 0.95
+
+    # hot pixels
+    self.hotPixel = 7000
+
+    # image region of interest
     self.roi = 834
-    self.guessCenterR = 530
-    self.guessCenterC = 500
-    self.centerRadLow = 148
-    self.centerRadHigh = 152
-    self.centerR = 550 #None
-    self.centerC = 508 #None
-    self.sumMin = 5.59e8
-    self.sumMax = 5.72e8
 
-    self.gMatrixFolder = "/reg/neh/home/khegazy/analysis/legendreFitMatrices/"
-    self.Nrebin = 5
-    self.Nlegendres = 6
-    self.NradialBins = 50
+    # readout noise subtraction range
+    self.ROradLow   = 0.9
+    self.ROradHigh  = 0.98
 
-    self.QperPixel = 22.6/900 #11.3
+    # image normalization range
+    self.normRadLow   = 0.65
+    self.normRadHigh  = 0.95
+    self.sumMin       = 5.59e8   # ignore all images with a total sum below this
+    self.sumMax       = 5.72e8   # ignore all images with a total sum above this
+
+    # center finding
+    self.centerR        = 550    # use None to do center finding
+    self.centerC        = 508    # use None to do center finding
+    self.guessCenterR   = 530
+    self.guessCenterC   = 500
+    self.centerRadLow   = 148    # use this range to determine center
+    self.centerRadHigh  = 152    # use this range to determine center
+
+    # legendre fitting parameters
+    self.Nlegendres     = 6      # will fit legendres [0, Nlegendres)
+    self.NradialBins    = 50     # number of radial bins when fitting
+    self.Nrebin         = 5      # rebin before fitting (makes fitting faster)
+    self.gMatrixFolder  = "/reg/neh/home/khegazy/analysis/legendreFitMatrices/"
+
+
+    #################################
+    ###  diffraction information  ###
+    #################################
+
+    # q normalization
+    self.QperPixel = 22.6/900 
     self.Qmax = self.QperPixel*self.roi/2
+
+    # calculate sM(s) by normalizing with atomic diffraction
     self.normByAtomic = True
     self.atomicDiffractionFile = "/reg/neh/home5/khegazy/analysis/CHD/simulation/diffractionPattern/output/references/atomicScattering_CHD.dat"
     self.atomicDiffractionDataType = np.float64
+
+
+    #############################
+    ###  plotting parameters  ###
+    #############################
+
     self.plotPrefix = ""
     self.plotFigSize = (14, 6)
     self.dpi = 80
 
 
-newNames = [
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-001-024.4950_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-002-024.5850_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-003-024.6300_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-004-024.4950_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-005-024.4800_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-006-024.6000_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-007-024.5400_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-008-024.3700_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-009-024.6150_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-010-024.4500_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-011-024.5700_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-012-024.4650_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-013-024.5250_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-014-024.5100_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-015-024.7950_0001.tif",
-  "/reg/ued/ana/scratch/CHD/20161212/LongScan2/run013/images-ANDOR1/ANDOR1_delayHigh-016-024.5550_0001.tif"]
-
 
 config = CONFIG()
+
+
+
 
 ###################################
 #####  get background images  #####
 ###################################
+
 bkgImages = []
 reCenterImgs = []
 centerRsum = 0.
