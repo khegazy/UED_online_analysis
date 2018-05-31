@@ -163,9 +163,11 @@ def onlineAnalysis(config, getImgNormDistribution=False):
   ###  initialize file lists  ###
   loadedFiles = []
   loadFiles = []
-  queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
+  queryFiles = []
+  if config.doQueryFolder:
+    queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
   for fld in config.loadFolders:
-    folderName = fld["folder"] + "/" + config.fileExtention
+    folderName = fld["folder"] + "/*" + config.fileExtention
     diffractionFiles = glob.glob(folderName)
     bkgImgFiles = [fld["background"]]*len(diffractionFiles)
     centerRs = [fld["centerR"]]*len(diffractionFiles)
@@ -184,28 +186,29 @@ def onlineAnalysis(config, getImgNormDistribution=False):
 
 
   ###  initialize plots  ###
-  plt.ion()
-  Qrange = np.arange(config.NradialBins+1)*config.Qmax/(config.NradialBins)
-  fig,ax = plt.subplots(2, 4, figsize=config.plotFigSize, dpi=config.dpi)
+  if not getImgNormDistribution:
+    plt.ion()
+    Qrange = np.arange(config.NradialBins+1)*config.Qmax/(config.NradialBins)
+    fig,ax = plt.subplots(2, 4, figsize=config.plotFigSize, dpi=config.dpi)
 
-  ax[0,0].get_xaxis().set_visible(False)
-  ax[0,0].get_yaxis().set_visible(False)
-  ax[1,0].get_xaxis().set_visible(False)
-  ax[1,0].get_yaxis().set_visible(False)
-  ax[0,1].set(xlabel=r'Q $[\AA^{-1}]$', ylabel="")
-  ax[1,1].set(xlabel="Time", ylabel="Total Counts")
-  ax[0,2].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
-  ax[1,2].set(xlabel="Time [ps]", ylabel="Legendre 0")
-  ax[0,3].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
-  ax[1,3].set(xlabel="Time [ps]", ylabel="Legendre 2")
+    ax[0,0].get_xaxis().set_visible(False)
+    ax[0,0].get_yaxis().set_visible(False)
+    ax[1,0].get_xaxis().set_visible(False)
+    ax[1,0].get_yaxis().set_visible(False)
+    ax[0,1].set(xlabel=r'Q $[\AA^{-1}]$', ylabel="")
+    ax[1,1].set(xlabel="Time", ylabel="Total Counts")
+    ax[0,2].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
+    ax[1,2].set(xlabel="Time [ps]", ylabel="Legendre 0")
+    ax[0,3].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
+    ax[1,3].set(xlabel="Time [ps]", ylabel="Legendre 2")
 
-  plotCurLeg, = ax[0,1].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
-  plotL0LO,   = ax[1,2].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
-  plotL2LO,   = ax[1,3].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+    plotCurLeg, = ax[0,1].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+    plotL0LO,   = ax[1,2].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+    plotL2LO,   = ax[1,3].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
 
 
   ###  image variables  ###
-  aggregateImage = np.zeros((1024,1024), np.int32)
+  aggregateImage = np.zeros((1024,1024), np.float64)
   imageSums = []
   NsumRejected = 0
 
@@ -271,7 +274,7 @@ def onlineAnalysis(config, getImgNormDistribution=False):
 
 
   ###  retrieve gMatrix for legendre fitting  ###
-  assert ((config.roi+1)%config.Nrebin == 0),\
+  assert ((config.roi + (1 - config.roi%2))%config.Nrebin == 0),\
       "ERROR: Cannot rebin an image with size [{}, {}] by {}, change roi!".format(
           config.roi+1, config.roi+1, config.Nrebin)
   imgRebinSize = (config.roi+1)/config.Nrebin
@@ -299,7 +302,7 @@ def onlineAnalysis(config, getImgNormDistribution=False):
 
   loadingImage = False
   curBkgAddr = ""
-  loadConfig = CONFIG()
+  loadConfig = copy.deepcopy(config)
   while (len(loadFiles) != 0) or config.doQueryFolder:
     if len(loadFiles):
       name, bkgAddr, loadConfig.centerR, loadConfig.centerC = loadFiles.pop(0)
@@ -359,9 +362,11 @@ def onlineAnalysis(config, getImgNormDistribution=False):
     if (imgSum < config.sumMin) or (imgSum > config.sumMax):
       NsumRejected += 1
       print("INFO: Rejected image %s with a total sum of %f!" % (name, imgSum))
-      print("INFO: Total sum cut has rejected %i images!" % (NsumRejected)
+      print("INFO: Total sum cut has rejected %i images!" % (NsumRejected))
       continue
     if (getImgNormDistribution):
+      if ((len(loadFiles) is 0) and (len(queryFiles) is 0)):
+        return imageSums
       continue
 
 
@@ -432,10 +437,6 @@ def onlineAnalysis(config, getImgNormDistribution=False):
           save_results(legCoeffDict, loadedFiles, averageLegCoeffArray,
             config.saveFolder, config.saveFileName)
 
-        plt.hist(saveNorms, 30)
-        plt.show()
-        plt.savefig("normDist.png")
-
 
         ###  plot results of loaded files  ###
         timeDelay = (delays - delays[0])*1e-9/(3e8*1e-12)
@@ -497,6 +498,7 @@ def onlineAnalysis(config, getImgNormDistribution=False):
 
     #####  plot time domain legendre fits  #####
 
+    print("plotting results")
     ###  diffraction patterns  ###
     ax[0,0].imshow(imgOrig)
     ax[1,0].imshow(aggregateImage)
@@ -540,6 +542,7 @@ def onlineAnalysis(config, getImgNormDistribution=False):
     #plotL2LO.set_ydata(lineOut)
 
     fig.canvas.draw()
+    print("plotted results")
 
 
 
