@@ -60,9 +60,11 @@ def find_center(image, rGuess, cGuess, radLow, radHigh, Nsamples=50, radSize=80)
   plt.show()
   """
 
-  circle = np.concatenate((np.reshape(rMask,(-1,1)), np.reshape(cMask, (-1,1))), axis=1)
+  circle = np.concatenate((np.reshape(rMask,(-1,1)), 
+              np.reshape(cMask, (-1,1))), axis=1)
   centerEstimates = np.array([rGuess, cGuess])
-  centerR,centerC = optimize.fmin(minFunct, centerEstimates, args=tuple(circle))
+  centerR,centerC = optimize.fmin(minFunct, centerEstimates, 
+              args=tuple(circle), disp=False)
 
   return int(centerR), int(centerC)
 
