@@ -189,22 +189,44 @@ def onlineAnalysis(config, getImgNormDistribution=False):
   if not getImgNormDistribution:
     plt.ion()
     Qrange = np.arange(config.NradialBins+1)*config.Qmax/(config.NradialBins)
-    fig,ax = plt.subplots(2, 4, figsize=config.plotFigSize, dpi=config.dpi)
+    LOmin = np.searchsorted(Qrange, [config.LineOutMinQ])[0]
+    LOmax = np.searchsorted(Qrange, [config.LineOutMaxQ])[0]
+    fig = plt.figure(figsize=config.plotFigSize, dpi=config.dpi)
 
-    ax[0,0].get_xaxis().set_visible(False)
-    ax[0,0].get_yaxis().set_visible(False)
-    ax[1,0].get_xaxis().set_visible(False)
-    ax[1,0].get_yaxis().set_visible(False)
-    ax[0,1].set(xlabel=r'Q $[\AA^{-1}]$', ylabel="")
-    ax[1,1].set(xlabel="Time", ylabel="Total Counts")
-    ax[0,2].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
-    ax[1,2].set(xlabel="Time [ps]", ylabel="Legendre 0")
-    ax[0,3].set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
-    ax[1,3].set(xlabel="Time [ps]", ylabel="Legendre 2")
+    plotGrid = (2,6)
+    axCurDP = plt.subplot2grid(plotGrid, (0,0))
+    #axCurDP.set_title("Current Diffraction")
+    axCurDP.get_xaxis().set_visible(False)
+    axCurDP.get_yaxis().set_visible(False)
+    axCurDP.set_position([0.95,0.05, 0.05, 0.95])
 
-    plotCurLeg, = ax[0,1].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
-    plotL0LO,   = ax[1,2].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
-    plotL2LO,   = ax[1,3].plot(Qrange[:-1], np.zeros((config.NradialBins)), "b-")
+    axSumDP = plt.subplot2grid(plotGrid, (1,0))
+    #axSumDP.set_title("Aggregate Diffraction")
+    axSumDP.get_xaxis().set_visible(False)
+    axSumDP.get_yaxis().set_visible(False)
+    axSumDP.set_position([0.95,0.05, 0.05, 0.95])
+
+    axCurL0 = plt.subplot2grid(plotGrid, (0,1))
+    axCurL0.set(xlabel=r'Q $[\AA^{-1}]$', ylabel="Legendre 0")
+
+    axTotCN = plt.subplot2grid(plotGrid, (1,1))
+    axTotCN.set(xlabel="Time", ylabel="Total Counts")
+
+    axAllL0 = plt.subplot2grid(plotGrid, (0,2), colspan=2)
+    axAllL0.set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
+
+    axLinL0 = plt.subplot2grid(plotGrid, (1,2), colspan=2)
+    axLinL0.set(xlabel="Time [ps]", ylabel="Legendre 0")
+
+    axAllL2 = plt.subplot2grid(plotGrid, (0,4), colspan=2)
+    axAllL2.set(xlabel="Time [ps]", ylabel=r'Q $[\AA^{-1}]$')
+
+    axLinL2= plt.subplot2grid(plotGrid, (1,4), colspan=2)
+    axLinL2.set(xlabel="Time [ps]", ylabel="Legendre 2")
+
+    plotCurLeg, = axCurL0.plot(Qrange[:-1], np.zeros((config.NradialBins)), "k-")
+    plotL0LO,   = axLinL0.plot(Qrange[:-1], np.zeros((config.NradialBins)), "k-")
+    plotL2LO,   = axLinL2.plot(Qrange[:-1], np.zeros((config.NradialBins)), "k-")
 
 
   ###  image variables  ###
@@ -499,17 +521,20 @@ def onlineAnalysis(config, getImgNormDistribution=False):
     #####  plot time domain legendre fits  #####
 
     ###  diffraction patterns  ###
-    ax[0,0].imshow(imgOrig)
-    ax[1,0].imshow(aggregateImage)
+    axCurDP.imshow(imgOrig)
+    axSumDP.imshow(aggregateImage)
 
     plotCurLeg.set_ydata(legendreCoeffs[0,:])
-    #ax[0,1].set_ylim([0,legendreCoeffs[0,0]])
+    axCurL0.set_ylim([0.9*min(legendreCoeffs[0,:]),
+                      1.1*max(legendreCoeffs[0,:])])
 
-    ax[1,1].plot(np.arange(len(imageSums)), imageSums)
+    axTotCN.plot(np.arange(len(imageSums)), imageSums, color="k")
 
     ###  time dependent plots  ###
-
-    timeDelay = (delays - delays[0])*1e-2/(3e8*1e-12)
+    plotInds = np.reshape(np.argwhere(delays > config.plotMinDelay*1e6), (-1))
+    print("delays", delays)
+    print("plotInds",plotInds)
+    timeDelay = (delays[plotInds] - delays[0])*1e-2/(3e8*1e-12)
     if timeDelay.shape[0] > 1:
       timeDelay = np.insert(timeDelay, -1, 2*timeDelay[-1]-timeDelay[-2])
     else:
@@ -517,28 +542,35 @@ def onlineAnalysis(config, getImgNormDistribution=False):
     X,Y = np.meshgrid(timeDelay, Qrange)
     #axLegAll.pcolor(Qrange, timeDelay, averageLegCoeffArray[0,:,:], cmap=cm.RdBu)
     # aggregate legendre 0 plot
-    ax[0,2].pcolor(X, Y, averageLegCoeffArray[0,:,:].T, cmap=cm.RdBu)
-    ax[0,2].set_ylim([0,config.Qmax])
-    ax[0,2].set_xlim([timeDelay[0],timeDelay[-1]])
+    meanSubL0 = averageLegCoeffArray[0,plotInds,:]\
+                  - np.mean(averageLegCoeffArray[0,plotInds,:], axis=0)
+    axAllL0.pcolor(X, Y, meanSubL0.T, cmap=cm.RdBu)
+    axAllL0.set_ylim([0,config.Qmax])
+    axAllL0.set_xlim([timeDelay[0],timeDelay[-1]])
 
-    lineOut = np.sum(averageLegCoeffArray[0,:,10:20], axis=1)
+    lineOut = np.sum(meanSubL0[:,LOmin:LOmax], axis=1)
     plotL0LO.set_data(timeDelay[:-1], lineOut)
-    ax[1,2].set_ylim([min(lineOut),max(lineOut)])
-    ax[1,2].set_xlim([timeDelay[0],timeDelay[-1]])
+    axLinL0.set_ylim([min(lineOut),max(lineOut)])
+    axLinL0.set_xlim([timeDelay[0],timeDelay[-1]])
     #plotL0LO.set_xdata(timeDelay[:-1])
     #plotL0LO.set_ydata(lineOut)
 
     # aggregate legendre 2 plot
-    ax[0,3].pcolor(X, Y, averageLegCoeffArray[2,:,:].T, cmap=cm.RdBu)
-    ax[0,3].set_ylim([0,config.Qmax])
-    ax[0,3].set_xlim([timeDelay[0],timeDelay[-1]])
+    meanSubL2 = averageLegCoeffArray[2,plotInds,:]\
+                  - np.mean(averageLegCoeffArray[2,plotInds,:], axis=0)
+    axAllL2.pcolor(X, Y, meanSubL2.T, cmap=cm.RdBu)
+    axAllL2.set_ylim([0,config.Qmax])
+    axAllL2.set_xlim([timeDelay[0],timeDelay[-1]])
 
-    lineOut = np.sum(averageLegCoeffArray[2,:,10:20], axis=1)
+    lineOut = np.sum(meanSubL2[:,LOmin:LOmax], axis=1)
     plotL2LO.set_data(timeDelay[:-1], lineOut)
-    ax[1,3].set_ylim([min(lineOut),max(lineOut)])
-    ax[1,3].set_xlim([timeDelay[0],timeDelay[-1]])
+    axLinL2.set_ylim([min(lineOut),max(lineOut)])
+    axLinL2.set_xlim([timeDelay[0],timeDelay[-1]])
     #plotL2LO.set_xdata(timeDelay[:-1])
     #plotL2LO.set_ydata(lineOut)
+
+    #plt.autoscale(tight=True)
+    plt.tight_layout()
 
     fig.canvas.draw()
 
