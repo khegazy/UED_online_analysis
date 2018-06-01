@@ -341,8 +341,11 @@ def onlineAnalysis(config, getImgNormDistribution=False):
       ###  search query folder for new files  ###
       
       queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
+      if len(queryFiles) is 0:
+        print "INFO: Query folder is empty, waiting to check again",
+
       while len(queryFiles) == 0:
-        print("INFO: Query folder is empty, waiting to check again")
+        print "...",
         time.sleep(1)
         queryFiles = query_folder(config.queryFolder, config.fileExtention, loadedFiles)
       continue
@@ -481,9 +484,6 @@ def onlineAnalysis(config, getImgNormDistribution=False):
 
     #####  update time domain legendres  #####
     ind = np.searchsorted(delays, [info.stageDelay])[0]
-    print(delays)
-    print(ind, info.stageDelay)
-    print(np.any((delays-info.stageDelay) == 0))
     if np.any((delays-info.stageDelay) == 0):
       delayInd = delays[ind]
       coeffs,norm = legCoeffDict[delayInd] 
@@ -498,7 +498,6 @@ def onlineAnalysis(config, getImgNormDistribution=False):
 
     #####  plot time domain legendre fits  #####
 
-    print("plotting results")
     ###  diffraction patterns  ###
     ax[0,0].imshow(imgOrig)
     ax[1,0].imshow(aggregateImage)
@@ -542,7 +541,6 @@ def onlineAnalysis(config, getImgNormDistribution=False):
     #plotL2LO.set_ydata(lineOut)
 
     fig.canvas.draw()
-    print("plotted results")
 
 
 
