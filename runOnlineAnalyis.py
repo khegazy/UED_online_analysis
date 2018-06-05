@@ -117,9 +117,17 @@ class CONFIG():
     ###  plotting parameters  ###
     #############################
 
-    self.plotPrefix = ""
-    self.plotFigSize = (14, 6)
-    self.dpi = 80
+    # time range
+    self.plotMinDelay = 24.4
+
+    # q range of line outs
+    self.LineOutMinQ = 2
+    self.LineOutMaxQ = 4
+
+    self.plotDirectory = "plots"     # must specify file name or "." for current directory
+    self.plotPrefix    = ""
+    self.plotFigSize   = (14, 7)
+    self.dpi           = 80
 
 
 config = CONFIG()

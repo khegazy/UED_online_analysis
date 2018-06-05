@@ -493,7 +493,9 @@ def onlineAnalysis(config, getImgNormDistribution=False):
           figLoad.colorbar(img, ax=axLoad)
           img.set_clim(-1*maxRange, maxRange)
           figLoad.canvas.draw()
-          figLoad.savefig("legednre" + str(i) + "_loadedFiles.png")
+          figLoad.savefig(config.plotDirectory 
+                  + "/legendre" + str(i) + "_loadedFiles.png")
+
 
       continue
 
@@ -532,9 +534,7 @@ def onlineAnalysis(config, getImgNormDistribution=False):
 
     ###  time dependent plots  ###
     plotInds = np.reshape(np.argwhere(delays > config.plotMinDelay*1e6), (-1))
-    print("delays", delays)
-    print("plotInds",plotInds)
-    timeDelay = (delays[plotInds] - delays[0])*1e-2/(3e8*1e-12)
+    timeDelay = (delays[plotInds] - delays[0])/(3e8*1e-3)
     if timeDelay.shape[0] > 1:
       timeDelay = np.insert(timeDelay, -1, 2*timeDelay[-1]-timeDelay[-2])
     else:
@@ -592,7 +592,8 @@ def onlineAnalysis(config, getImgNormDistribution=False):
 
   for i in range(config.Nlegendres):
     ax.pcolor(X, Y, averageLegCoeffArray[i,:,:].T, cmap=cm.RdBu)
-    finalFig.savefig(config.plotPrefix + "Legendre" + str(i) + ".png")
+    finalFig.savefig(config.plotDirectory + "/" + 
+          config.plotPrefix + "Legendre" + str(i) + ".png")
 
               
 
